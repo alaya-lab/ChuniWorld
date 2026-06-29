@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChuniWorld - Interactive World Model Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        /* ========== Sakura Petals (full-page overlay) ========== */
+        #sakura-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;  /* never blocks clicks */
+            z-index: 1;            /* above page bg/text, BELOW video frames */
+        }
+
+        /* ========== Hero / Video Wall ========== */
+        .hero {
+            position: relative;
+            height: 100vh;
+            min-height: 620px;
+            overflow: hidden;
+            background: #0a0a0f;
+        }
+
+        .video-wall {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            padding: 8px;
+            z-index: 2;            /* above the sakura layer */
+        }
+
+        .wall-col {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wall-track {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: wallScrollUp var(--dur, 44s) linear infinite;
+            will-change: transform;
+        }
+
+        .wall-col.reverse .wall-track {
+            animation-name: wallScrollDown;
+        }
+
+        .wall-track video {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 8px;
+            display: block;
+            background: #12121a;
+        }
+
+        @keyframes wallScrollUp {
+            from { transform: translateY(0); }
+            to   { transform: translateY(-50%); }
+        }
+        @keyframes wallScrollDown {
+            from { transform: translateY(-50%); }
+            to   { transform: translateY(0); }
+        }
+
+        /* Dim/readability overlay on top of the wall */
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 4;            /* above wall(2) so the title stays readable */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            background:
+                radial-gradient(ellipse at center,
+                    rgba(10, 10, 15, 0.45) 0%,
+                    rgba(10, 10, 15, 0.78) 55%,
+                    rgba(10, 10, 15, 0.96) 100%),
+                linear-gradient(180deg, rgba(10,10,15,0.6) 0%, rgba(10,10,15,0) 25%, rgba(10,10,15,0) 75%, #0a0a0f 100%);
+        }
+
+        /* Scroll cue at the bottom of the hero */
+        .scroll-cue {
+            position: absolute;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            color: #9ca3af;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.7;
+            animation: cueBob 2s ease-in-out infinite;
+        }
+        @keyframes cueBob {
+            0%, 100% { transform: translate(-50%, 0); }
+            50%      { transform: translate(-50%, 8px); }
+        }
+
+        /* ========== Header ========== */
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: transparent;
+            max-width: 860px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #f3f4f6;
+            line-height: 1.25;
+            margin-bottom: 16px;
+        }
+        .header h1 .title-name {
+            background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .team-name {
+            display: inline-block;
+            font-size: 1.15rem;
+            color: #60a5fa;
+            text-decoration: none;
+            margin: -4px 0 18px;
+            letter-spacing: 0.02em;
+            transition: color 0.2s;
+        }
+        .header .team-name:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+
+        /* AlayaStudio logo (black artwork -> inverted to white on the dark theme) */
+        .alaya-logo { filter: invert(1); width: auto; display: block; }
+        .header .team-name { line-height: 0; }
+        .header .team-name .alaya-logo { height: 30px; opacity: .9; transition: opacity .2s; }
+        .header .team-name:hover .alaya-logo { opacity: 1; }
+
+        /* Brand logo, top-right corner of the page (scrolls away, not fixed) */
+        .corner-logo { position: absolute; top: 22px; right: 26px; z-index: 50; line-height: 0; }
+        .corner-logo .alaya-logo {
+            height: 76px;
+            filter: invert(1) drop-shadow(0 1px 5px rgba(0,0,0,.75));
+            opacity: .92; transition: opacity .2s;
+        }
+        .corner-logo:hover .alaya-logo { opacity: 1; }
+        @media (max-width: 768px) {
+            .corner-logo { top: 14px; right: 14px; }
+            .corner-logo .alaya-logo { height: 50px; }
+        }
+
+        .header .subtitle {
+            font-size: 1.3rem;
+            color: #9ca3af;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            line-height: 1.6;
+        }
+
+        .header .links {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .header .links a {
+            padding: 10px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .link-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .link-primary:hover { background: #2563eb; }
+
+        .link-secondary {
+            background: #1f2937;
+            color: #d1d5db;
+            border: 1px solid #374151;
+        }
+
+        .link-secondary:hover { background: #374151; }
+
+        /* ========== Stats Bar ========== */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            padding: 30px 20px;
+            border-top: 1px solid #1f2937;
+            border-bottom: 1px solid #1f2937;
+            background: #0d0d14;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #60a5fa;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        /* ========== Sections ========== */
+        .section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .section-desc {
+            text-align: center;
+            color: #9ca3af;
+            max-width: 700px;
+            margin: 0 auto 40px;
+            line-height: 1.6;
+            text-wrap: balance;   /* avoid a lone last word (widow) */
+        }
+        /* Method Overview blurb: keep it on one line on desktop */
+        .section-desc.method-desc { max-width: none; white-space: nowrap; }
+        @media (max-width: 820px) {
+            .section-desc.method-desc { white-space: normal; }
+        }
+
+        /* ========== Result Blocks ========== */
+        .result-block + .result-block {
+            margin-top: 56px;
+        }
+
+        .result-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 20px;
+            padding-left: 14px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        /* ===== Multi-video comparison slider ===== */
+        .result-hint {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            margin: -8px 0 18px;
+            padding-left: 14px;
+        }
+        .compare {
+            position: relative;
+            z-index: 2;            /* keep sakura petals behind the videos */
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .compare-viewport {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+        .cmp-layer { position: absolute; inset: 0; }
+        .cmp-layer video {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            object-fit: cover; display: block;
+        }
+        .cmp-label {
+            position: absolute; top: 12px;
+            transform: translateX(-50%);
+            z-index: 5;
+            background: rgba(13,13,20,.8);
+            color: #fff; font-size: .72rem; font-weight: 600;
+            letter-spacing: .02em;
+            padding: 4px 9px; border-radius: 7px;
+            white-space: nowrap; pointer-events: none;
+        }
+        .cmp-handle {
+            position: absolute; top: -12%; height: 124%;
+            width: 2px; z-index: 6;
+            background: rgba(255,255,255,.85);
+            transform: translateX(-50%) rotate(8deg);
+            transform-origin: center center;
+            cursor: ew-resize;
+            box-shadow: 0 0 10px rgba(0,0,0,.7);
+        }
+        .cmp-handle::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 30px; height: 30px; transform: translate(-50%,-50%);
+            background: #fff; border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,.55);
+        }
+        .cmp-handle::after {
+            content: '\2194'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            color: #111; font-size: .9rem; font-weight: 900;
+            pointer-events: none;
+        }
+        .scene-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .scene-tab {
+            padding: 6px 16px; border: 1px solid #374151; border-radius: 20px;
+            background: transparent; color: #9ca3af; cursor: pointer;
+            font-size: .85rem; transition: all .2s;
+        }
+        .scene-tab:hover { border-color: #60a5fa; color: #60a5fa; }
+        .scene-tab.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+
+        /* ===== Camera carousel ===== */
+        .cam-carousel { position: relative; z-index: 2; max-width: 1000px; margin: 0 auto; }
+        .cam-viewport { overflow: hidden; border-radius: 12px; }
+        .cam-track { display: flex; transition: transform .45s cubic-bezier(.4,0,.2,1); }
+        .cam-page {
+            flex: 0 0 100%;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        }
+        .cam-card {
+            position: relative; aspect-ratio: 16 / 9;
+            background: #000; border: 1px solid #1f2937;
+            border-radius: 10px; overflow: hidden;
+        }
+        .cam-card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .cam-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 1px solid #374151; background: rgba(13,13,20,.82);
+            color: #e5e7eb; font-size: 1.5rem; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all .2s;
+        }
+        .cam-arrow:hover:not(:disabled) { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .cam-arrow:disabled { opacity: .3; cursor: default; }
+        .cam-prev { left: -60px; }
+        .cam-next { right: -60px; }
+        .cam-dots { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+        .cam-dot {
+            width: 9px; height: 9px; padding: 0; border: none; border-radius: 50%;
+            background: #374151; cursor: pointer; transition: all .2s;
+        }
+        .cam-dot.active { background: #3b82f6; width: 22px; border-radius: 5px; }
+        @media (max-width: 768px) {
+            .cam-page { grid-template-columns: 1fr; }
+            .cam-prev { left: 6px; } .cam-next { right: 6px; }
+        }
+
+        /* ===== Prompt-driven (magic) carousel with captions ===== */
+        .mg-carousel { position: relative; z-index: 2; max-width: 1000px; margin: 0 auto; }
+        .mg-viewport { overflow: hidden; border-radius: 12px; }
+        .mg-track { display: flex; transition: transform .45s cubic-bezier(.4,0,.2,1); }
+        .mg-page { flex: 0 0 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 2px; }
+        .mg-card { background: #12121a; border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; }
+        .mg-media { position: relative; aspect-ratio: 16 / 9; background: #000; }
+        .mg-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mg-cap { padding: 12px 14px; }
+        .mg-cap p { margin: 0; font-size: .82rem; line-height: 1.5; }
+        .mg-cap p + p { margin-top: 6px; }
+        .mg-cap .tag {
+            display: inline-block; font-size: .6rem; font-weight: 700;
+            letter-spacing: .05em; text-transform: uppercase;
+            padding: 2px 6px; border-radius: 4px; margin-right: 7px; vertical-align: middle;
+        }
+        .mg-scene { color: #9ca3af; }
+        .mg-scene .tag { background: #1f2937; color: #9ca3af; }
+        .mg-action { color: #e5e7eb; }
+        .mg-action .tag { background: #1e3a5f; color: #60a5fa; }
+        /* Game-module corner label */
+        .game-badge {
+            position: absolute; top: 8px; left: 8px; z-index: 2;
+            background: rgba(13,13,20,.8); color: #e5e7eb;
+            font-size: .72rem; font-weight: 600; padding: 3px 9px;
+            border-radius: 6px; white-space: nowrap;
+        }
+        .mg-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 1px solid #374151; background: rgba(13,13,20,.82);
+            color: #e5e7eb; font-size: 1.5rem; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all .2s;
+        }
+        .mg-arrow:hover:not(:disabled) { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .mg-arrow:disabled { opacity: .3; cursor: default; }
+        .mg-prev { left: -60px; }
+        .mg-next { right: -60px; }
+        .mg-dots { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+        .mg-dot { width: 9px; height: 9px; padding: 0; border: none; border-radius: 50%; background: #374151; cursor: pointer; transition: all .2s; }
+        .mg-dot.active { background: #3b82f6; width: 22px; border-radius: 5px; }
+        @media (max-width: 768px) {
+            .mg-page { grid-template-columns: 1fr; }
+            .mg-prev { left: 6px; } .mg-next { right: 6px; }
+        }
+
+        /* ===== World-consistent comparison carousel ===== */
+        .wc-carousel { position: relative; z-index: 2; max-width: 1000px; margin: 0 auto; }
+        .wc-viewport { overflow: hidden; border-radius: 12px; }
+        .wc-track { display: flex; transition: transform .45s cubic-bezier(.4,0,.2,1); }
+        .wc-page { flex: 0 0 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 2px; }
+        .wc-card {
+            position: relative; aspect-ratio: 16 / 9; background: #000;
+            border: 1px solid #1f2937; border-radius: 10px; overflow: hidden;
+        }
+        .wc-card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .wc-badge {
+            position: absolute; top: 10px; left: 10px; z-index: 2;
+            background: rgba(13,13,20,.8); color: #d1d5db;
+            font-size: .74rem; font-weight: 600; padding: 4px 10px; border-radius: 7px;
+        }
+        .wc-card.ours { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6, 0 0 18px rgba(59,130,246,.35); }
+        .wc-card.ours .wc-badge { background: #3b82f6; color: #fff; }
+        .wc-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 1px solid #374151; background: rgba(13,13,20,.82);
+            color: #e5e7eb; font-size: 1.5rem; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all .2s;
+        }
+        .wc-arrow:hover:not(:disabled) { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .wc-arrow:disabled { opacity: .3; cursor: default; }
+        .wc-prev { left: -60px; }
+        .wc-next { right: -60px; }
+        .wc-dots { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+        .wc-dot { width: 9px; height: 9px; padding: 0; border: none; border-radius: 50%; background: #374151; cursor: pointer; transition: all .2s; }
+        .wc-dot.active { background: #3b82f6; width: 22px; border-radius: 5px; }
+        @media (max-width: 768px) {
+            .wc-page { grid-template-columns: 1fr; }
+            .wc-prev { left: 6px; } .wc-next { right: 6px; }
+        }
+
+        /* Long-horizon: two clips side by side in one row, matching the 1000px carousels */
+        .long-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* ===== Interactive skill demo (pyramid) ===== */
+        .pyramid-demo { max-width: 1000px; margin: 0 auto; position: relative; z-index: 2; }
+        .py-stage {
+            position: relative; aspect-ratio: 16 / 9; background: #000;
+            border: 1px solid #1f2937; border-radius: 12px; overflow: hidden;
+        }
+        .py-stage .py-vid {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; display: block;
+            opacity: 0; transition: opacity .45s ease;
+        }
+        .py-stage .py-vid.active { opacity: 1; }
+        .py-prompt {
+            position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+            background: rgba(13,13,20,.82); border: 1px solid #2d2d44; color: #fff;
+            padding: 9px 20px; border-radius: 22px; font-size: .92rem; font-weight: 600;
+            white-space: nowrap; opacity: 0; transition: opacity .35s; pointer-events: none;
+        }
+        .py-prompt.show { opacity: 1; }
+        .py-skills { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 16px; }
+        .py-skill {
+            display: flex; flex-direction: column; align-items: center; gap: 7px;
+            padding: 12px 8px; border: 1px solid #2d2d44; border-radius: 10px;
+            background: #12121a; color: #cbd5e1; cursor: pointer; transition: all .2s;
+            font-size: .82rem; font-weight: 500;
+        }
+        .py-skill img { width: 38px; height: 38px; object-fit: contain; }
+        .py-skill:hover:not(:disabled) { border-color: #3b82f6; color: #fff; transform: translateY(-2px); }
+        .py-skill.active { border-color: #3b82f6; background: #1e3a5f; color: #fff; box-shadow: 0 0 16px rgba(59,130,246,.45); }
+        .py-skill:disabled { opacity: .38; cursor: not-allowed; filter: grayscale(.7); transform: none; }
+        @media (max-width: 768px) { .py-skills { grid-template-columns: repeat(3, 1fr); } }
+
+        /* ========== Video Grid ========== */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 24px;
+        }
+
+        .video-card {
+            background: #12121a;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+            transition: border-color 0.3s;
+            position: relative;
+            z-index: 2;            /* sits above the sakura layer */
+        }
+
+        .video-card:hover { border-color: #3b82f6; }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 */
+            background: #000;
+        }
+
+        .video-wrapper video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Placeholder when no video file */
+        .video-placeholder {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #4b5563;
+            font-size: 1rem;
+        }
+
+        .video-info {
+            padding: 16px;
+        }
+
+        .video-info .tag {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-right: 6px;
+            margin-bottom: 8px;
+        }
+
+        .tag-t2v { background: #1e3a5f; color: #60a5fa; }
+        .tag-i2v { background: #3b1f4e; color: #a78bfa; }
+        .tag-action { background: #1f3d2e; color: #4ade80; }
+        .tag-memory { background: #3d2f1f; color: #fbbf24; }
+
+        .video-info h3 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .video-info .prompt-text {
+            font-size: 0.8rem;
+            color: #6b7280;
+            line-height: 1.5;
+            max-height: 60px;
+            overflow: hidden;
+        }
+
+        /* ========== Interactive Demo Section ========== */
+        .interactive-section {
+            background: linear-gradient(180deg, #0d0d14, #12121a);
+            border-top: 1px solid #1f2937;
+        }
+
+        .interactive-demo {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #1a1a2e;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid #2d2d44;
+            position: relative;
+            z-index: 2;            /* sits above the sakura layer */
+        }
+
+        .demo-screen {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            max-height: 50vh;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .demo-screen .placeholder-msg {
+            color: #4b5563;
+            text-align: center;
+        }
+
+        .demo-screen .placeholder-msg h3 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            color: #6b7280;
+        }
+
+        .demo-controls {
+            padding: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-top: 1px solid #2d2d44;
+        }
+
+        .demo-controls input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: #0d0d14;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .demo-controls input[type="text"]:focus {
+            border-color: #3b82f6;
+        }
+
+        .demo-controls button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-generate {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-generate:hover { background: #2563eb; }
+
+        .btn-upload {
+            background: #1f2937;
+            color: #d1d5db;
+            border: 1px solid #374151;
+        }
+
+        .btn-upload:hover { background: #374151; }
+
+        .model-selector {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #2d2d44;
+            align-items: center;
+        }
+
+        .model-selector .label {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-right: 4px;
+        }
+
+        .model-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .model-option:hover { border-color: #60a5fa; color: #60a5fa; }
+
+        .model-option.selected {
+            background: #1e3a5f;
+            border-color: #3b82f6;
+            color: #60a5fa;
+        }
+
+        .model-option .model-name {
+            font-weight: 600;
+        }
+
+        .model-option .model-hw {
+            font-size: 0.7rem;
+            color: #6b7280;
+            background: #1f2937;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .model-option.selected .model-hw {
+            background: #172e4a;
+            color: #93c5fd;
+        }
+
+        .demo-keys {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 20px;
+            border-top: 1px solid #2d2d44;
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+
+        .wasd-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            grid-template-rows: repeat(2, 40px);
+            gap: 4px;
+        }
+
+        .wasd-grid .key-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: #2d2d44;
+            border-radius: 6px;
+            border: 1px solid #3d3d5c;
+            color: #d1d5db;
+            font-family: monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+
+        .wasd-grid .key-box:hover {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        .wasd-grid .key-box.active {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            color: white;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+        }
+
+        .wasd-grid .empty {
+            visibility: hidden;
+        }
+
+        .key-label {
+            font-size: 0.7rem;
+            color: #6b7280;
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .other-keys {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .other-keys .key-hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .other-keys kbd {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            padding: 2px 8px;
+            background: #2d2d44;
+            border-radius: 5px;
+            border: 1px solid #3d3d5c;
+            color: #d1d5db;
+            font-family: monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* ========== Method Overview ========== */
+        .method-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+            .method-cards { grid-template-columns: 1fr; }
+        }
+
+        .method-teaser {
+            display: block;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto 36px;
+            border-radius: 12px;
+            border: 1px solid #1f2937;
+        }
+
+        .method-card {
+            background: #12121a;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+        }
+        .method-card:hover {
+            transform: scale(1.035);
+            border-color: #3b82f6;
+            animation: cardGlow 1.3s ease-in-out infinite;
+        }
+        @keyframes cardGlow {
+            0%, 100% { box-shadow: 0 0 12px rgba(59,130,246,.35); }
+            50%      { box-shadow: 0 0 26px rgba(168,85,247,.65); }
+        }
+
+        .method-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: #60a5fa;
+        }
+
+        .method-card p {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            line-height: 1.6;
+        }
+
+        /* ========== Authors ========== */
+        .authors-section {
+            max-width: 1000px;
+            margin: 60px auto 0;
+            padding: 50px 20px 40px;
+            text-align: left;
+            border-top: 1px solid #1f2937;
+        }
+        .authors-section h2 {
+            font-size: 1.7rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #f3f4f6;
+        }
+        .authors-section .team-tag {
+            color: #60a5fa;
+            font-size: 1.05rem;
+            margin-bottom: 30px;
+            display: block;
+        }
+        .team-logo { margin: 0 0 28px; }
+        .team-logo .alaya-logo { height: 76px; margin: 0; }
+        .authors-group {
+            margin: 14px 0;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .authors-group .label {
+            color: #9ca3af;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .authors-group .names {
+            color: #e5e7eb;
+        }
+        .authors-note {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            font-style: italic;
+            margin-bottom: 24px;
+        }
+
+        /* ========== Footer ========== */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            border-top: 1px solid #1f2937;
+            color: #4b5563;
+            font-size: 0.85rem;
+        }
+        .footer p { margin: 5px 0; }
+        .footer .contact { color: #9ca3af; }
+        .footer a { color: #60a5fa; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.7rem; }
+            .stats-bar { gap: 30px; flex-wrap: wrap; }
+            .video-grid { grid-template-columns: 1fr; }
+            .demo-controls { flex-direction: column; }
+            .video-wall { grid-template-columns: repeat(3, 1fr); }
+            .wall-col:nth-child(n + 4) { display: none; }
+        }
+        /* ================= Nebula background + title glow ================= */
+        body {
+            background:
+                radial-gradient(42% 50% at 18% 28%, rgba(124,58,237,.40), transparent 70%),
+                radial-gradient(46% 56% at 82% 18%, rgba(56,120,246,.34), transparent 70%),
+                radial-gradient(52% 60% at 64% 82%, rgba(236,72,153,.26), transparent 72%),
+                radial-gradient(44% 52% at 8% 88%, rgba(34,211,238,.22), transparent 70%),
+                #070510;
+            background-attachment: fixed;
+        }
+        /* let the nebula show through the otherwise-opaque sections */
+        .stats-bar, .interactive-section { background: transparent; }
+
+        @media (prefers-reduced-motion: no-preference) {
+            body { animation: nebulaDrift 26s ease-in-out infinite alternate; }
+            .header h1 .title-name { animation: titleGlow 3.2s ease-in-out infinite; }
+        }
+        @keyframes nebulaDrift {
+            0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0 0; }
+            100% { background-position: 7% 9%, -7% 6%, 5% -7%, -6% -5%, 0 0; }
+        }
+        @keyframes titleGlow {
+            0%,100% { filter: drop-shadow(0 0 6px rgba(96,165,250,.35)); }
+            50%     { filter: drop-shadow(0 0 16px rgba(168,85,247,.75)) drop-shadow(0 0 26px rgba(244,114,182,.4)); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Falling sakura petals (decorative, non-interactive) -->
+<canvas id="sakura-canvas"></canvas>
+
+<!-- Fixed brand logo (top-right) -->
+<a href="#authors" class="corner-logo" aria-label="ALAYA Lab" style="font-weight:700;font-size:22px;color:#fff;text-decoration:none;opacity:.85;">ALAYA Lab</a>
+
+<!-- ==================== Hero / Video Wall Teaser ==================== -->
+<div class="hero">
+    <div class="video-wall" id="video-wall"></div>
+
+    <div class="hero-overlay">
+        <div class="header">
+            <h1><span class="title-name">ChuniWorld:</span> Interactive Long-Horizon World Modeling Toward Generative Reality</h1>
+            <p class="subtitle">
+                An interactive autoregressive world model with real-time camera control,
+                prompt switching, and long-horizon memory consistency.
+            </p>
+            <div class="links">
+                <a href="static/alayaworld_tech_report.pdf" target="_blank" rel="noopener" class="link-secondary">Technical Report</a>
+                <a href="#" class="link-secondary">GitHub</a>
+                <a href="#interactive" class="link-primary">Try Your Own Magic</a>
+            </div>
+        </div>
+    </div>
+
+    <a href="#results" class="scroll-cue">Scroll ↓</a>
+</div>
+
+<!-- ==================== Stats ==================== -->
+<div class="stats-bar">
+    <div class="stat-item">
+        <div class="stat-value" data-to="720" data-suffix="p">720p</div>
+        <div class="stat-label">Resolution</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value" data-to="24" data-suffix=" FPS">24 FPS</div>
+        <div class="stat-label">Real-time Generation</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value" data-to="60" data-suffix="s+">60s+</div>
+        <div class="stat-label">Long-horizon</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value" data-to="15" data-suffix="B">15B</div>
+        <div class="stat-label">Parameters</div>
+    </div>
+</div>
+
+<!-- ==================== Method Overview ==================== -->
+<div class="section">
+    <h2 class="section-title">Method Overview</h2>
+
+    <img src="static/img/teaser.jpg" alt="ChuniWorld teaser: diverse scenes, camera control and interactive magic" class="method-teaser">
+
+    <p class="section-desc method-desc">
+        ChuniWorld is built around four core properties &mdash;
+        agency, persistence, durability, and responsiveness.
+    </p>
+
+    <div class="method-cards">
+        <div class="method-card">
+            <h3>Agency</h3>
+            <p>Two control channels: a rendered 3D cache with lightweight AdaLN camera modulation for grounded, trajectory-aware navigation, and chunk-level prompt switching to introduce new events mid-generation.</p>
+        </div>
+        <div class="method-card">
+            <h3>Persistence</h3>
+            <p>World-consistent memory &mdash; an explicit 3D cache reprojected to the queried view for spatial recall, plus a compressed frame-history embedding for temporal continuity, so revisited places stay recognizable.</p>
+        </div>
+        <div class="method-card">
+            <h3>Durability</h3>
+            <p>Long-horizon stability from training on drifted histories and an error bank that re-injects accumulated artifacts into both memory and target, preventing errors from compounding over minute-long rollouts.</p>
+        </div>
+        <div class="method-card">
+            <h3>Responsiveness</h3>
+            <p>Real-time interaction via few-step DMD distillation and short temporal chunks, with prompt switching at chunk boundaries to minimize both visual and semantic latency.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== Demo Results ==================== -->
+<div class="section" id="results">
+    <h2 class="section-title">Demo Results</h2>
+
+    <!-- Diverse Style Video Generation -->
+    <div class="result-block">
+        <h3 class="result-title">Diverse Style Video Generation</h3>
+        <p class="result-hint">Same scene, seven styles &mdash; drag the handles to compare, switch the scene below.</p>
+        <div class="compare" id="style-compare">
+            <div class="scene-tabs">
+                <button class="scene-tab active" data-scene="0">Jiangnan Town</button>
+                <button class="scene-tab" data-scene="1">Green Village</button>
+            </div>
+            <div class="compare-viewport">
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_realistic.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_oil.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_ink.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_cyberpunk.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_zelda.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_minecraft.mp4" autoplay muted loop playsinline></video></div>
+                <div class="cmp-layer"><video src="static/videos/styles/jiangnan_pixel.mp4" autoplay muted loop playsinline></video></div>
+
+                <span class="cmp-label">Realistic</span>
+                <span class="cmp-label">Oil Painting</span>
+                <span class="cmp-label">Ink Wash</span>
+                <span class="cmp-label">Cyberpunk</span>
+                <span class="cmp-label">Zelda</span>
+                <span class="cmp-label">Minecraft</span>
+                <span class="cmp-label">Pixel</span>
+
+                <div class="cmp-handle"></div>
+                <div class="cmp-handle"></div>
+                <div class="cmp-handle"></div>
+                <div class="cmp-handle"></div>
+                <div class="cmp-handle"></div>
+                <div class="cmp-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera-Controllable Video Generation -->
+    <div class="result-block">
+        <h3 class="result-title">Camera-Controllable Video Generation</h3>
+        <p class="result-hint">Real-time 6-DoF camera control with an on-screen joystick &mdash; use the arrows to browse 16 clips.</p>
+        <div class="cam-carousel" id="cam-carousel">
+            <button class="cam-arrow cam-prev" aria-label="Previous">&lsaquo;</button>
+            <div class="cam-viewport">
+                <div class="cam-track">
+                    <div class="cam-page">
+                        <div class="cam-card"><video src="static/videos/camera/camera_01.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_02.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_03.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_04.mp4" muted loop playsinline></video></div>
+                    </div>
+                    <div class="cam-page">
+                        <div class="cam-card"><video src="static/videos/camera/camera_05.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_06.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_07.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_08.mp4" muted loop playsinline></video></div>
+                    </div>
+                    <div class="cam-page">
+                        <div class="cam-card"><video src="static/videos/camera/camera_09.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_10.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_11.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_12.mp4" muted loop playsinline></video></div>
+                    </div>
+                    <div class="cam-page">
+                        <div class="cam-card"><video src="static/videos/camera/camera_13.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_14.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_15.mp4" muted loop playsinline></video></div>
+                        <div class="cam-card"><video src="static/videos/camera/camera_16.mp4" muted loop playsinline></video></div>
+                    </div>
+                </div>
+            </div>
+            <button class="cam-arrow cam-next" aria-label="Next">&rsaquo;</button>
+            <div class="cam-dots">
+                <button class="cam-dot active" aria-label="Page 1"></button>
+                <button class="cam-dot" aria-label="Page 2"></button>
+                <button class="cam-dot" aria-label="Page 3"></button>
+                <button class="cam-dot" aria-label="Page 4"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game-Style World Generation -->
+    <div class="result-block">
+        <h3 class="result-title">Game-Style Video Generation</h3>
+        <p class="result-hint">Worlds generated in real-game and synthesized game styles &mdash; use the arrows to browse 16 clips.</p>
+        <div class="mg-carousel" id="game-carousel">
+            <button class="mg-arrow mg-prev" aria-label="Previous">&lsaquo;</button>
+            <div class="mg-viewport">
+                <div class="mg-track">
+
+                    <div class="mg-page">
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_01.mp4" muted loop playsinline></video><span class="game-badge">Genshin</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_02.mp4" muted loop playsinline></video><span class="game-badge">Genshin</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_03.mp4" muted loop playsinline></video><span class="game-badge">Cyberpunk 2077</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_04.mp4" muted loop playsinline></video><span class="game-badge">Cyberpunk 2077</span></div></div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_05.mp4" muted loop playsinline></video><span class="game-badge">Neverness to Everness</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_06.mp4" muted loop playsinline></video><span class="game-badge">Zenless Zone Zero</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_07.mp4" muted loop playsinline></video><span class="game-badge">Elden Ring</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_08.mp4" muted loop playsinline></video><span class="game-badge">Red Dead Redemption</span></div></div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_09.mp4" muted loop playsinline></video><span class="game-badge">The Legend of California</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_10.mp4" muted loop playsinline></video><span class="game-badge">The Legend of California</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_11.mp4" muted loop playsinline></video><span class="game-badge">Pixel Style</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_12.mp4" muted loop playsinline></video><span class="game-badge">Fantasy Style</span></div></div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_13.mp4" muted loop playsinline></video><span class="game-badge">Sketch Style</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_14.mp4" muted loop playsinline></video><span class="game-badge">Anime Style</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_15.mp4" muted loop playsinline></video><span class="game-badge">Oil Painting Style</span></div></div>
+                        <div class="mg-card"><div class="mg-media"><video src="static/videos/game/game_16.mp4" muted loop playsinline></video><span class="game-badge">Sci-Fi Style</span></div></div>
+                    </div>
+
+                </div>
+            </div>
+            <button class="mg-arrow mg-next" aria-label="Next">&rsaquo;</button>
+            <div class="mg-dots">
+                <button class="mg-dot active" aria-label="Page 1"></button>
+                <button class="mg-dot" aria-label="Page 2"></button>
+                <button class="mg-dot" aria-label="Page 3"></button>
+                <button class="mg-dot" aria-label="Page 4"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt-Driven Interaction -->
+    <div class="result-block">
+        <h3 class="result-title">Prompt-Driven Interaction</h3>
+        <p class="result-hint">Drop a prompt mid-scene to trigger an event &mdash; same world, different spells. Use the arrows to browse.</p>
+        <div class="mg-carousel" id="magic-carousel">
+            <button class="mg-arrow mg-prev" aria-label="Previous">&lsaquo;</button>
+            <div class="mg-viewport">
+                <div class="mg-track">
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_01.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A misty Jiangnan water town &mdash; whitewashed houses and stone bridges mirrored in the canal.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>Fireworks burst over the rooftops.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_02.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A misty Jiangnan water town &mdash; whitewashed houses and stone bridges mirrored in the canal.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A red-and-black magic circle erupts across the ground.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_03.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A misty Jiangnan water town &mdash; whitewashed houses and stone bridges mirrored in the canal.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A giant tree crashes down from the sky.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_04.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A misty Jiangnan water town &mdash; whitewashed houses and stone bridges mirrored in the canal.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A huge white bear is summoned into the street.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_05.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A sunny green meadow, a dirt path winding toward distant mountains.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A fireball detonates in a burst of flame.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_06.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A sunny green meadow, a dirt path winding toward distant mountains.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A blazing phoenix is summoned into the sky.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_07.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A sunny green meadow, a dirt path winding toward distant mountains.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>The whole world darkens into night.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_08.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A sunny green meadow, a dirt path winding toward distant mountains.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A towering purple monster is summoned.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_09.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A snowy mountain valley rendered in a soft oil-painting style.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A skeleton rises from the snow.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_10.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A sunlit cobblestone avenue leading to the Roman Colosseum.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A giant ice hammer slams onto the plaza.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_11.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A traditional Japanese courtyard framed by crimson autumn maples.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>The buildings crumble and collapse.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_12.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A Japanese shrine with a torii gate under a grey sky.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>Flames engulf the shrine.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_13.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A dreamlike frozen fantasy world glittering in blue light.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A wand wave makes flowers bloom across the ice.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_14.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A colorful Mediterranean game-style town by the sea.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A fiery phoenix is summoned overhead.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_15.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>A famous white Japanese castle framed by blooming cherry blossoms.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>A massive explosion erupts.</p>
+                            </div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/magic/magic_16.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap">
+                                <p class="mg-scene"><span class="tag">Scene</span>Desert pyramids glowing under a golden sunset.</p>
+                                <p class="mg-action"><span class="tag">Prompt</span>Green water floods and spreads across the sand.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <button class="mg-arrow mg-next" aria-label="Next">&rsaquo;</button>
+            <div class="mg-dots">
+                <button class="mg-dot active" aria-label="Page 1"></button>
+                <button class="mg-dot" aria-label="Page 2"></button>
+                <button class="mg-dot" aria-label="Page 3"></button>
+                <button class="mg-dot" aria-label="Page 4"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- World-Consistent Video Generation -->
+    <div class="result-block">
+        <h3 class="result-title">World-Consistent Video Generation</h3>
+        <p class="result-hint">Turn left and right, then look back &mdash; does the world stay consistent? Same trajectory, four methods.</p>
+        <div class="wc-carousel" id="world-carousel">
+            <button class="wc-arrow wc-prev" aria-label="Previous">&lsaquo;</button>
+            <div class="wc-viewport">
+                <div class="wc-track">
+
+                    <div class="wc-page">
+                        <div class="wc-card ours"><video src="static/videos/world/world_01.mp4" muted loop playsinline></video><span class="wc-badge">ChuniWorld (Ours)</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_02.mp4" muted loop playsinline></video><span class="wc-badge">DreaxX-World</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_03.mp4" muted loop playsinline></video><span class="wc-badge">lingBot-Fast</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_04.mp4" muted loop playsinline></video><span class="wc-badge">HY-World 1.5</span></div>
+                    </div>
+
+                    <div class="wc-page">
+                        <div class="wc-card ours"><video src="static/videos/world/world_05.mp4" muted loop playsinline></video><span class="wc-badge">ChuniWorld (Ours)</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_06.mp4" muted loop playsinline></video><span class="wc-badge">DreaxX-World</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_07.mp4" muted loop playsinline></video><span class="wc-badge">lingBot-Fast</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_08.mp4" muted loop playsinline></video><span class="wc-badge">HY-World 1.5</span></div>
+                    </div>
+
+                    <div class="wc-page">
+                        <div class="wc-card ours"><video src="static/videos/world/world_09.mp4" muted loop playsinline></video><span class="wc-badge">ChuniWorld (Ours)</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_10.mp4" muted loop playsinline></video><span class="wc-badge">DreaxX-World</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_11.mp4" muted loop playsinline></video><span class="wc-badge">lingBot-Fast</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_12.mp4" muted loop playsinline></video><span class="wc-badge">HY-World 1.5</span></div>
+                    </div>
+
+                    <div class="wc-page">
+                        <div class="wc-card ours"><video src="static/videos/world/world_13.mp4" muted loop playsinline></video><span class="wc-badge">ChuniWorld (Ours)</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_14.mp4" muted loop playsinline></video><span class="wc-badge">DreaxX-World</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_15.mp4" muted loop playsinline></video><span class="wc-badge">lingBot-Fast</span></div>
+                        <div class="wc-card"><video src="static/videos/world/world_16.mp4" muted loop playsinline></video><span class="wc-badge">HY-World 1.5</span></div>
+                    </div>
+
+                </div>
+            </div>
+            <button class="wc-arrow wc-next" aria-label="Next">&rsaquo;</button>
+            <div class="wc-dots">
+                <button class="wc-dot active" aria-label="Case 1"></button>
+                <button class="wc-dot" aria-label="Case 2"></button>
+                <button class="wc-dot" aria-label="Case 3"></button>
+                <button class="wc-dot" aria-label="Case 4"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Long-Horizon Video Generation -->
+    <div class="result-block">
+        <h3 class="result-title">Long-Horizon Video Generation</h3>
+        <p class="result-hint">Over a minute of continuous, drift-free generation per clip &mdash; all shown at 2&times; speed.</p>
+        <div class="mg-carousel" id="long-carousel">
+            <button class="mg-arrow mg-prev" aria-label="Previous">&lsaquo;</button>
+            <div class="mg-viewport">
+                <div class="mg-track">
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_01.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Green Valley</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_02.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Classical Garden</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_03.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Street View</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_04.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Seaside</p></div>
+                        </div>
+                    </div>
+
+                    <div class="mg-page">
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_05.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Ancient Hall</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_06.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Snowy Night</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_07.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Rocky Coast</p></div>
+                        </div>
+                        <div class="mg-card">
+                            <div class="mg-media"><video src="static/videos/long/long_08.mp4" muted loop playsinline></video></div>
+                            <div class="mg-cap"><p class="mg-scene"><span class="tag">2&times; speed</span>Violet Realm</p></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <button class="mg-arrow mg-next" aria-label="Next">&rsaquo;</button>
+            <div class="mg-dots">
+                <button class="mg-dot active" aria-label="Page 1"></button>
+                <button class="mg-dot" aria-label="Page 2"></button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ==================== Interactive Demo ==================== -->
+<div class="interactive-section section" id="interactive">
+    <h2 class="section-title">Try Your Own Magic!</h2>
+    <p class="section-desc">
+        Walk up to the pyramid, then cast a spell &mdash; pick one and watch it unfold.
+    </p>
+
+    <div class="pyramid-demo" id="pyramid-demo">
+        <div class="py-stage">
+            <video class="py-vid" data-manual muted playsinline></video>
+            <video class="py-vid" data-manual muted playsinline></video>
+            <div class="py-prompt" id="py-prompt">Walking to the pyramid&hellip;</div>
+        </div>
+        <div class="py-skills" id="py-skills">
+            <button class="py-skill" data-skill="fire"><img src="static/videos/pyramid/icons/fire.png" alt=""><span>Fire</span></button>
+            <button class="py-skill" data-skill="ice"><img src="static/videos/pyramid/icons/ice.png" alt=""><span>Ice</span></button>
+            <button class="py-skill" data-skill="water"><img src="static/videos/pyramid/icons/water.png" alt=""><span>Water</span></button>
+            <button class="py-skill" data-skill="earth"><img src="static/videos/pyramid/icons/earth.png" alt=""><span>Earth</span></button>
+            <button class="py-skill" data-skill="light"><img src="static/videos/pyramid/icons/light.png" alt=""><span>Light</span></button>
+            <button class="py-skill" data-skill="void"><img src="static/videos/pyramid/icons/void.png" alt=""><span>Void</span></button>
+            <button class="py-skill" data-skill="poison"><img src="static/videos/pyramid/icons/poison.png" alt=""><span>Poison</span></button>
+            <button class="py-skill" data-skill="rain"><img src="static/videos/pyramid/icons/rain.png" alt=""><span>Rain</span></button>
+            <button class="py-skill" data-skill="fireworks"><img src="static/videos/pyramid/icons/fireworks.png" alt=""><span>Fireworks</span></button>
+            <button class="py-skill" data-skill="summon"><img src="static/videos/pyramid/icons/summon.png" alt=""><span>Summon</span></button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== Authors ==================== -->
+<div class="authors-section" id="authors">
+    <h2>Team</h2>
+    <div class="team-logo" style="font-size:32px;font-weight:700;letter-spacing:2px;opacity:.9;">ALAYA Lab</div>
+    <p class="authors-note">Within each role category, authors are listed in alphabetical order by their first names.</p>
+    <div class="authors-group">
+        <span class="label">Core Lead:</span>
+        <span class="names">Kaipeng Zhang</span>
+    </div>
+    <div class="authors-group">
+        <span class="label">Lead:</span>
+        <span class="names">Chuanhao Li</span>
+    </div>
+    <div class="authors-group">
+        <span class="label">Core Contributor:</span>
+        <span class="names">Chuanhao Li, Kaipeng Zhang, Yifan Zhan, Yongtao Ge, Yuanyang Yin</span>
+    </div>
+    <div class="authors-group">
+        <span class="label">Contributor:</span>
+        <span class="names">Jiaming Tan, Kang He, Liaoyuan Fan, Ruicong Liu, Xiaojie Xu, Xuangeng Chu, Zhen Li, Zhengyuan Lin, Zhixiang Wang, Zian Meng, Zihui Gao</span>
+    </div>
+</div>
+
+<!-- ==================== Footer ==================== -->
+<div class="footer">
+    <p class="contact">For collaboration or business inquiries, contact <a href="mailto:kaipeng.zhang@shanda.com">kaipeng.zhang@shanda.com</a></p>
+    <p>ChuniWorld &copy; 2026 | ALAYA Lab</p>
+</div>
+
+<!-- ==================== Scripts ==================== -->
+<script>
+    // ===== Hero Video Wall (teaser) =====
+    // Build a full-screen 5-column wall of looping videos that auto-scroll.
+    // Only 6 source clips exist, so they are rotated/repeated to fill all columns.
+    (function buildVideoWall() {
+        const wall = document.getElementById('video-wall');
+        if (!wall) return;
+
+        // A fresh mix from the Diverse Style / Camera-Controllable / Prompt-Driven demos.
+        const SOURCES = [
+            'static/videos/styles/jiangnan_cyberpunk.mp4',
+            'static/videos/camera/camera_07.mp4',
+            'static/videos/magic/magic_01.mp4',
+            'static/videos/styles/greenfield_realistic.mp4',
+            'static/videos/styles/jiangnan_zelda.mp4',
+            'static/videos/camera/camera_09.mp4',
+            'static/videos/magic/magic_06.mp4',
+            'static/videos/styles/greenfield_pixel.mp4',
+            'static/videos/styles/jiangnan_oil.mp4',
+            'static/videos/camera/camera_11.mp4',
+            'static/videos/magic/magic_10.mp4',
+            'static/videos/styles/greenfield_sketch.mp4',
+            'static/videos/styles/jiangnan_minecraft.mp4',
+            'static/videos/camera/camera_14.mp4',
+            'static/videos/magic/magic_13.mp4',
+            'static/videos/camera/camera_02.mp4',
+            'static/videos/game/game_14.mp4',
+            'static/videos/magic/magic_15.mp4',
+            'static/videos/game/game_16.mp4',
+            'static/videos/magic/magic_16.mp4',
+        ];
+        const COLS = 5;
+        const TILES_PER_COL = 4;                 // 5 cols x 4 = the 20 clips above, no repeats
+        const offsets = [0, 4, 8, 12, 16];       // each column gets its own slice of the list
+        const durations = [40, 48, 44, 52, 46];  // seconds; varied for an organic flow
+
+        for (let c = 0; c < COLS; c++) {
+            const col = document.createElement('div');
+            col.className = 'wall-col' + (c % 2 === 1 ? ' reverse' : '');
+
+            const track = document.createElement('div');
+            track.className = 'wall-track';
+            track.style.setProperty('--dur', durations[c] + 's');
+
+            // One set of tiles, then a duplicate set -> translateY(-50%) loops seamlessly.
+            const oneSet = [];
+            for (let i = 0; i < TILES_PER_COL; i++) {
+                oneSet.push(SOURCES[(i + offsets[c]) % SOURCES.length]);
+            }
+            [...oneSet, ...oneSet].forEach(src => {
+                const v = document.createElement('video');
+                v.src = src;
+                v.muted = true;
+                v.loop = true;
+                v.autoplay = true;
+                v.playsInline = true;
+                v.setAttribute('playsinline', '');
+                v.preload = 'auto';
+                track.appendChild(v);
+            });
+
+            col.appendChild(track);
+            wall.appendChild(col);
+        }
+
+        // Some browsers need an explicit play() kick for muted autoplay.
+        wall.querySelectorAll('video').forEach(v => {
+            const p = v.play();
+            if (p && p.catch) p.catch(() => {});
+        });
+    })();
+
+    // ===== Multi-video comparison slider (Diverse Style) =====
+    (function compareSlider() {
+        const root = document.getElementById('style-compare');
+        if (!root) return;
+        const vp = root.querySelector('.compare-viewport');
+        const layers  = Array.from(root.querySelectorAll('.cmp-layer'));
+        const labels  = Array.from(root.querySelectorAll('.cmp-label'));
+        const handles = Array.from(root.querySelectorAll('.cmp-handle'));
+        const sceneBtns = Array.from(root.querySelectorAll('.scene-tab'));
+        const vids = layers.map(l => l.querySelector('video'));
+        const N = layers.length;
+
+        const BASE = 'static/videos/styles/';
+        const SCENES = [
+            { name: 'Jiangnan Town',
+              files:  ['jiangnan_realistic.mp4','jiangnan_oil.mp4','jiangnan_ink.mp4','jiangnan_cyberpunk.mp4','jiangnan_zelda.mp4','jiangnan_minecraft.mp4','jiangnan_pixel.mp4'],
+              labels: ['Realistic','Oil Painting','Ink Wash','Cyberpunk','Zelda','Minecraft','Pixel'] },
+            { name: 'Green Village',
+              files:  ['greenfield_realistic.mp4','greenfield_oil.mp4','greenfield_sketch.mp4','greenfield_cyberpunk.mp4','greenfield_zelda.mp4','greenfield_minecraft.mp4','greenfield_pixel.mp4'],
+              labels: ['Realistic','Oil Painting','Sketch','Cyberpunk','Zelda','Minecraft','Pixel'] },
+        ];
+
+        // boundary positions 0..100 (N+1 entries); the two ends stay fixed.
+        const pos = [];
+        const resetPos = () => { for (let i = 0; i <= N; i++) pos[i] = i * 100 / N; };
+        resetPos();
+
+        const SLANT = 4; // % of width; ~8° at 16:9. Outer edges stay straight.
+        function render() {
+            for (let i = 0; i < N; i++) {
+                const lp = pos[i], rp = pos[i + 1];
+                const lTop = (i === 0)     ? 0   : lp + SLANT;
+                const lBot = (i === 0)     ? 0   : lp - SLANT;
+                const rTop = (i === N - 1) ? 100 : rp + SLANT;
+                const rBot = (i === N - 1) ? 100 : rp - SLANT;
+                layers[i].style.clipPath =
+                    `polygon(${lTop}% 0, ${rTop}% 0, ${rBot}% 100%, ${lBot}% 100%)`;
+                // place the label at the band's TOP centre (where the chip sits)
+                if (labels[i]) labels[i].style.left = ((lTop + rTop) / 2) + '%';
+            }
+            handles.forEach((h, k) => { h.style.left = pos[k + 1] + '%'; });
+        }
+
+        function loadScene(idx) {
+            const s = SCENES[idx];
+            if (!s) return;
+            for (let i = 0; i < N; i++) {
+                const v = vids[i];
+                if (v && !v.src.endsWith(s.files[i])) {
+                    v.src = BASE + s.files[i];
+                    v.load();
+                    const p = v.play(); if (p && p.catch) p.catch(() => {});
+                }
+                if (labels[i]) labels[i].textContent = s.labels[i];
+            }
+            resetPos();
+            render();
+            sceneBtns.forEach((b, k) => b.classList.toggle('active', k === idx));
+        }
+        sceneBtns.forEach((b, k) => b.addEventListener('click', () => loadScene(k)));
+
+        let dragging = -1;
+        const pct = (clientX) => {
+            const b = vp.getBoundingClientRect();
+            return Math.max(0, Math.min(100, (clientX - b.left) / b.width * 100));
+        };
+        function move(e) {
+            if (dragging < 0) return;
+            const cx = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+            const min = 4;
+            pos[dragging] = Math.max(pos[dragging - 1] + min,
+                                     Math.min(pos[dragging + 1] - min, pct(cx)));
+            render();
+            if (e.cancelable) e.preventDefault();
+        }
+        handles.forEach((h, k) => {
+            const start = (e) => { dragging = k + 1; if (e.cancelable) e.preventDefault(); };
+            h.addEventListener('mousedown', start);
+            h.addEventListener('touchstart', start, { passive: false });
+        });
+        window.addEventListener('mousemove', move);
+        window.addEventListener('touchmove', move, { passive: false });
+        const stop = () => { dragging = -1; };
+        window.addEventListener('mouseup', stop);
+        window.addEventListener('touchend', stop);
+
+        vids.forEach(v => { v.muted = true; v.loop = true; v.playsInline = true; });
+
+        // keep the styles loosely synced to the first clip so the scene lines up
+        function sync() {
+            const m = vids[0];
+            if (m && !isNaN(m.currentTime)) {
+                for (let i = 1; i < vids.length; i++) {
+                    const v = vids[i];
+                    if (v.duration && m.currentTime < v.duration
+                        && Math.abs(v.currentTime - m.currentTime) > 0.2) {
+                        v.currentTime = m.currentTime;
+                    }
+                }
+            }
+            requestAnimationFrame(sync);
+        }
+        requestAnimationFrame(sync);
+
+        loadScene(0);
+    })();
+
+    // ===== Paged carousels (camera + prompt-driven) =====
+    function setupCarousel(root, p) {
+        if (!root) return;
+        const track = root.querySelector('.' + p + '-track');
+        const pages = Array.from(root.querySelectorAll('.' + p + '-page'));
+        const prev  = root.querySelector('.' + p + '-prev');
+        const next  = root.querySelector('.' + p + '-next');
+        const dots  = Array.from(root.querySelectorAll('.' + p + '-dot'));
+        const n = pages.length;
+        let idx = 0;
+
+        function update() {
+            track.style.transform = `translateX(${-idx * 100}%)`;
+            dots.forEach((d, k) => d.classList.toggle('active', k === idx));
+            if (prev) prev.disabled = idx === 0;
+            if (next) next.disabled = idx === n - 1;
+            // play only the current page's clips
+            pages.forEach((pg, k) => {
+                pg.querySelectorAll('video').forEach(v => {
+                    if (k === idx) { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); }
+                    else { v.pause(); }
+                });
+            });
+        }
+        const go = (i) => { idx = Math.max(0, Math.min(n - 1, i)); update(); };
+
+        if (prev) prev.addEventListener('click', () => go(idx - 1));
+        if (next) next.addEventListener('click', () => go(idx + 1));
+        dots.forEach((d, k) => d.addEventListener('click', () => go(k)));
+
+        update();
+    }
+    setupCarousel(document.getElementById('cam-carousel'), 'cam');
+    setupCarousel(document.getElementById('magic-carousel'), 'mg');
+    setupCarousel(document.getElementById('world-carousel'), 'wc');
+    setupCarousel(document.getElementById('long-carousel'), 'mg');
+    setupCarousel(document.getElementById('game-carousel'), 'mg');
+
+    // ===== Stats: count up from 0 the first time they scroll into view =====
+    (function statsCountUp() {
+        const bar = document.querySelector('.stats-bar');
+        if (!bar) return;
+        const vals = Array.from(bar.querySelectorAll('.stat-value[data-to]'));
+        if (!vals.length) return;
+        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const txt = (v, n) => v.textContent = n + (v.dataset.suffix || '');
+
+        if (reduced) return;                 // leave the final values as-is
+        vals.forEach(v => txt(v, 0));        // reset to 0 (still below the fold)
+
+        let done = false;
+        function run() {
+            if (done) return; done = true;
+            const DUR = 1300;
+            vals.forEach(v => {
+                const to = parseFloat(v.dataset.to);
+                let start = null;
+                function step(ts) {
+                    if (start === null) start = ts;
+                    const p = Math.min(1, (ts - start) / DUR);
+                    const eased = 1 - Math.pow(1 - p, 3);   // easeOutCubic
+                    txt(v, Math.round(to * eased));
+                    if (p < 1) requestAnimationFrame(step);
+                    else txt(v, to);
+                }
+                requestAnimationFrame(step);
+            });
+            // Fallback: ensure final values even if rAF is paused (e.g. hidden tab).
+            setTimeout(() => vals.forEach(v => txt(v, parseFloat(v.dataset.to))), DUR + 250);
+        }
+
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) { run(); io.disconnect(); } });
+        }, { threshold: 0.4 });
+        io.observe(bar);
+    })();
+
+    // ===== Play only on-screen videos =====
+    // Browsers cap how many videos decode at once (~16). With many clips on the page
+    // the off-screen ones must be paused, or the visible section never gets to play.
+    (function videoVisibilityManager() {
+        const play = (v) => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(e => {
+                if (e.isIntersecting) play(e.target);
+                else e.target.pause();
+            });
+        }, { rootMargin: '150px 0px', threshold: 0.01 });
+
+        document.querySelectorAll('video:not([data-manual])').forEach(v => io.observe(v));
+
+        // Re-assert visible videos when the tab/page becomes visible again.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) return;
+            document.querySelectorAll('video:not([data-manual])').forEach(v => {
+                const r = v.getBoundingClientRect();
+                if (r.bottom > -150 && r.top < innerHeight + 150) play(v);
+            });
+        });
+    })();
+
+    // ===== Interactive skill demo: walk to the pyramid, then cast a spell =====
+    // Two stacked <video> layers cross-fade so switching clips never flashes black.
+    (function pyramidDemo() {
+        const root = document.getElementById('pyramid-demo');
+        if (!root) return;
+        const layers = Array.from(root.querySelectorAll('.py-vid'));
+        const prompt = document.getElementById('py-prompt');
+        const btns = Array.from(root.querySelectorAll('.py-skill'));
+        if (layers.length < 2) return;
+        const BASE = 'static/videos/pyramid/';
+        let mode = 'walk', started = false, front = 0;
+
+        layers.forEach(v => { v.muted = true; v.loop = false; v.playsInline = true; });
+        const setEnabled = (on) => btns.forEach(b => { b.disabled = !on; if (on) b.classList.remove('active'); });
+
+        // Load a clip into the hidden layer, then cross-fade once it can play.
+        // The visible layer keeps showing its last frame meanwhile — no black gap.
+        function crossfadeTo(src, rate) {
+            const bi = front === 0 ? 1 : 0;
+            const back = layers[bi];
+            const onReady = () => {
+                back.removeEventListener('canplay', onReady);
+                back.playbackRate = rate || 1;
+                const p = back.play(); if (p && p.catch) p.catch(() => {});
+                back.classList.add('active');
+                layers[front].classList.remove('active');
+                front = bi;
+            };
+            back.addEventListener('canplay', onReady, { once: true });
+            back.src = src;
+            back.load();
+        }
+
+        layers.forEach(v => v.addEventListener('ended', () => {
+            if (v !== layers[front]) return;          // ignore the hidden/previous layer
+            if (mode !== 'walk' && mode !== 'skill') return;
+            const was = mode;
+            mode = 'idle';
+            setEnabled(true);                         // unlock for a (new) choice
+            prompt.textContent = was === 'walk' ? 'Choose a spell to cast' : 'Cast another spell';
+            prompt.classList.add('show');
+        }));
+
+        btns.forEach(b => b.addEventListener('click', () => {
+            if (b.disabled) return;
+            mode = 'skill';
+            btns.forEach(x => { x.disabled = true; x.classList.toggle('active', x === b); });
+            prompt.classList.remove('show');
+            crossfadeTo(BASE + b.getAttribute('data-skill') + '.mp4');
+        }));
+
+        setEnabled(false);                            // locked until the walk finishes
+        prompt.textContent = 'Keep watching — your spells unlock at the pyramid ✨';
+        prompt.classList.add('show');
+
+        // Start the walk on first view; resume if paused mid-clip; never auto-restart once ended.
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(e => {
+                if (e.isIntersecting) {
+                    if (!started) { started = true; mode = 'walk'; crossfadeTo(BASE + 'walk.mp4', 2); }
+                    else { const v = layers[front]; if (v && v.paused && !v.ended) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } }
+                } else {
+                    const v = layers[front]; if (v && !v.paused) v.pause();
+                }
+            });
+        }, { threshold: 0.25 });
+        io.observe(root);
+    })();
+
+    // ===== Sakura Petals =====
+    (function sakura() {
+        // Respect users who prefer reduced motion.
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        const canvas = document.getElementById('sakura-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const COUNT = 30;
+        const COLORS = ['#ffd7e6', '#f7b8d2', '#ffc0d9', '#f9a8c9'];
+        let W = 0, H = 0, dpr = 1, petals = [], running = true, rafId = null;
+
+        const rand = (a, b) => a + Math.random() * (b - a);
+
+        function resize() {
+            dpr = 1;  // petals are soft/blurry by nature — no need for retina cost
+            W = window.innerWidth;
+            H = window.innerHeight;
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function spawn(petal, fromTop) {
+            petal.x = rand(0, W);
+            petal.y = fromTop ? rand(-H * 0.2, -10) : rand(0, H);
+            petal.size = rand(7, 15);
+            petal.speedY = rand(0.45, 1.3);
+            petal.drift = rand(-0.3, 0.3);          // slow horizontal wind
+            petal.swayAmp = rand(14, 42);
+            petal.swayFreq = rand(0.4, 1.3);
+            petal.phase = rand(0, Math.PI * 2);
+            petal.angle = rand(0, Math.PI * 2);
+            petal.spin = rand(-0.025, 0.025);
+            petal.opacity = rand(0.45, 0.8);
+            petal.color = COLORS[(Math.random() * COLORS.length) | 0];
+            petal.tilt = rand(0.5, 1);              // base vertical squash
+            return petal;
+        }
+
+        for (let i = 0; i < COUNT; i++) petals.push(spawn({}, false));
+
+        function drawPetal(p, t) {
+            const sway = Math.sin(t * 0.001 * p.swayFreq + p.phase) * p.swayAmp;
+            const flip = Math.abs(Math.sin(t * 0.002 * p.swayFreq + p.phase)); // 0..1 flutter
+            const s = p.size;
+
+            ctx.save();
+            ctx.translate(p.x + sway, p.y);
+            ctx.rotate(p.angle);
+            ctx.scale(1, (0.3 + flip * 0.7) * p.tilt);   // squash to fake 3D flip
+            ctx.globalAlpha = p.opacity;
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 6;
+
+            // Petal outline (two beziers) with a soft notch at the tip.
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(s * 0.55, -s * 0.5, s * 0.5, -s * 1.2, s * 0.12, -s * 1.5);
+            ctx.quadraticCurveTo(0, -s * 1.35, -s * 0.12, -s * 1.5);   // tip notch
+            ctx.bezierCurveTo(-s * 0.5, -s * 1.2, -s * 0.55, -s * 0.5, 0, 0);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function loop(t) {
+            if (!running) return;
+            ctx.clearRect(0, 0, W, H);
+            for (const p of petals) {
+                p.y += p.speedY;
+                p.x += p.drift;
+                p.angle += p.spin;
+                if (p.y > H + 40 || p.x < -60 || p.x > W + 60) spawn(p, true);
+                drawPetal(p, t);
+            }
+            rafId = requestAnimationFrame(loop);
+        }
+        rafId = requestAnimationFrame(loop);
+
+        // Pause when the tab is hidden to save CPU/battery.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                running = false;
+                if (rafId) cancelAnimationFrame(rafId);
+            } else if (!running) {
+                running = true;
+                rafId = requestAnimationFrame(loop);
+            }
+        });
+    })();
+</script>
+
+</body>
+</html>
